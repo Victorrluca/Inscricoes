@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SalaMaker Matrículas</title>
+    
+    <!-- Tailwind CSS para os Estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Ícones Phosphor (Carregados via CSS para evitar erros de módulos JS) -->
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Configuração do Babel para forçar o React Classic Runtime e evitar erros de importação (importSource) -->
+    <script>
+        Babel.registerPreset("react-classic", {
+            presets: [
+                [Babel.availablePresets["react"], { "runtime": "classic" }]
+            ]
+        });
+    </script>
+
+    <!-- Firebase (Versão Compatível) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="env,react-classic">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- CONFIGURAÇÃO DO FIREBASE ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+          ? JSON.parse(__firebase_config) 
+          : {
+              apiKey: "AIzaSyBBXXuZLXlQr9A-S89i1qrjLV-e52MqKVU",
+              authDomain: "inscricoes-b5d13.firebaseapp.com",
+              projectId: "inscricoes-b5d13",
+              storageBucket: "inscricoes-b5d13.firebasestorage.app",
+              messagingSenderId: "753295991672",
+              appId: "1:753295991672:web:fdbda24d87bed3fb47de8d"
+            };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : "salamaker-matriculas-v1";
+
+        // --- ADAPTADOR DE FUNÇÕES FIREBASE ---
+        const collection = (db, ...paths) => db.collection(paths.join('/'));
+        const addDoc = (ref, data) => ref.add(data);
+        const updateDoc = (ref, data) => ref.update(data);
+        const deleteDoc = (ref) => ref.delete();
+        const doc = (db, ...paths) => db.doc(paths.join('/'));
+        const onSnapshot = (ref, next, error) => ref.onSnapshot(next, error);
+        const signInAnonymously = (auth) => auth.signInAnonymously();
+        const signInWithCustomToken = (auth, token) => auth.signInWithCustomToken(token);
+        const onAuthStateChanged = (auth, cb) => auth.onAuthStateChanged(cb);
+
+        // --- FUNÇÃO DE CÓPIA PARA ÁREA DE TRANSFERÊNCIA ---
+        const copyToClipboard = (text) => {
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+        };
+
+        // --- COMPONENTES DE ÍCONES ---
+        const PlusCircle = ({ size=24, className='' }) => <i className={`ph ph-plus-circle ${className}`} style={{ fontSize: size }}></i>;
+        const Search = ({ size=24, className='' }) => <i className={`ph ph-magnifying-glass ${className}`} style={{ fontSize: size }}></i>;
+        const CheckCircle2 = ({ size=24, className='' }) => <i className={`ph-fill ph-check-circle ${className}`} style={{ fontSize: size }}></i>;
+        const AlertCircle = ({ size=24, className='' }) => <i className={`ph-fill ph-warning-circle ${className}`} style={{ fontSize: size }}></i>;
+        const LayoutDashboard = ({ size=24, className='' }) => <i className={`ph ph-squares-four ${className}`} style={{ fontSize: size }}></i>;
+        const UserPlus = ({ size=24, className='' }) => <i className={`ph ph-user-plus ${className}`} style={{ fontSize: size }}></i>;
+        const School = ({ size=24, className='' }) => <i className={`ph ph-graduation-cap ${className}`} style={{ fontSize: size }}></i>;
+        const X = ({ size=24, className='' }) => <i className={`ph ph-x ${className}`} style={{ fontSize: size }}></i>;
+        const Clock = ({ size=24, className='' }) => <i className={`ph-fill ph-clock ${className}`} style={{ fontSize: size }}></i>;
+        const MapPin = ({ size=24, className='' }) => <i className={`ph-fill ph-map-pin ${className}`} style={{ fontSize: size }}></i>;
+        const Trash2 = ({ size=24, className='' }) => <i className={`ph ph-trash ${className}`} style={{ fontSize: size }}></i>;
+        const Users = ({ size=24, className='' }) => <i className={`ph ph-users ${className}`} style={{ fontSize: size }}></i>;
+        const PauseCircle = ({ size=24, className='' }) => <i className={`ph-fill ph-pause-circle ${className}`} style={{ fontSize: size }}></i>;
+        const ShieldCheck = ({ size=24, className='' }) => <i className={`ph-fill ph-shield-check ${className}`} style={{ fontSize: size }}></i>;
+        const Eye = ({ size=24, className='' }) => <i className={`ph-fill ph-eye ${className}`} style={{ fontSize: size }}></i>;
+        const AlertTriangle = ({ size=24, className='' }) => <i className={`ph-fill ph-warning ${className}`} style={{ fontSize: size }}></i>;
+        const Filter = ({ size=24, className='' }) => <i className={`ph-fill ph-funnel ${className}`} style={{ fontSize: size }}></i>;
+        const LogOut = ({ size=24, className='' }) => <i className={`ph ph-sign-out ${className}`} style={{ fontSize: size }}></i>;
+        const Lock = ({ size=24, className='' }) => <i className={`ph-fill ph-lock-key ${className}`} style={{ fontSize: size }}></i>;
+        const Wifi = ({ size=24, className='' }) => <i className={`ph ph-wifi-high ${className}`} style={{ fontSize: size }}></i>;
+        const ShieldAlert = ({ size=24, className='' }) => <i className={`ph-fill ph-shield-warning ${className}`} style={{ fontSize: size }}></i>;
+        const FileText = ({ size=24, className='' }) => <i className={`ph-fill ph-file-text ${className}`} style={{ fontSize: size }}></i>;
+        const RefreshCw = ({ size=24, className='' }) => <i className={`ph ph-arrows-clockwise ${className}`} style={{ fontSize: size }}></i>;
+        const UserMinus = ({ size=24, className='' }) => <i className={`ph ph-user-minus ${className}`} style={{ fontSize: size }}></i>;
+        const ChevronRight = ({ size=24, className='' }) => <i className={`ph-bold ph-caret-right ${className}`} style={{ fontSize: size }}></i>;
+        const Database = ({ size=24, className='' }) => <i className={`ph-fill ph-database ${className}`} style={{ fontSize: size }}></i>;
+        const Info = ({ size=24, className='' }) => <i className={`ph-fill ph-info ${className}`} style={{ fontSize: size }}></i>;
+        const UploadIcon = ({ size=24, className='' }) => <i className={`ph-bold ph-upload-simple ${className}`} style={{ fontSize: size }}></i>;
+        const MessageSquare = ({ size=24, className='' }) => <i className={`ph-fill ph-chat-centered-text ${className}`} style={{ fontSize: size }}></i>;
+        const ArrowRight = ({ size=24, className='' }) => <i className={`ph-bold ph-arrow-right ${className}`} style={{ fontSize: size }}></i>;
+        const ArrowLeft = ({ size=24, className='' }) => <i className={`ph-bold ph-arrow-left ${className}`} style={{ fontSize: size }}></i>;
+        const Copy = ({ size=24, className='' }) => <i className={`ph-bold ph-copy ${className}`} style={{ fontSize: size }}></i>;
+
+        const PASSWORDS = { ADMIN: 'admin123', PROFESSOR: 'maker123' };
+
+        const DEFAULT_SCHOOLS = [
+          "01 - ALCINO", "02 - AMADOR", "03 - ALEXANDRINO", "04 - Cavazza", "05 - Osmarinho",
+          "06 - ADHERBAL", "07 - DEIRÓ", "08 - Dorival", "09 - NOMURA", "10 - Elizabeth",
+          "11 - Elvira", "12 - Estevan Placencio", "13 - Ézio Berzaghi", "15 - Gilberto Florêncio",
+          "16 - João de Almeida", "17 - DOMINGOS", "18 - PIMENTEL", "19 - LEVY", "20 - Padre Luiz",
+          "21 - MARLENE", "22 - Naly", "23 - NESTOR", "24 - ONOFRA", "25 - OSVALDO",
+          "26 - Raposo", "27 - BRANDÃO", "28 - SANTUCCI", "29 - SUZETE", "30 - Taro Mizutori",
+          "31 - Takaoka", "32 - Ivani", "33 - Jorge", "34 - RENATO ROSA", "35 - Eneias",
+          "36 - ANNA IRENE", "37 - Alfredo", "38 - Egidio Costa"
+        ];
+
+        const CLASS_CAPACITY = 20;
+
+        const formatDate = (isoString) => {
+          if (!isoString) return "-";
+          try {
+            const date = new Date(isoString);
+            return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+          } catch { return "-"; }
+        };
+
+        function App() {
+          const [user, setUser] = useState(null);
+          const [firebaseUser, setFirebaseUser] = useState(null);
+          const [view, setView] = useState('login');
+          const [students, setStudents] = useState([]);
+          const [dbSchools, setDbSchools] = useState([]); 
+          const [loading, setLoading] = useState(true);
+          const [notification, setNotification] = useState(null); 
+          const [confirmModal, setConfirmModal] = useState(null);
+          const [fbError, setFbError] = useState(null);
+
+          useEffect(() => {
+            const initAuth = async () => {
+              try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                  await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                  await signInAnonymously(auth);
+                }
+              } catch (err) {
+                setFbError(`Erro de Autenticação (${err.code})`);
+              }
+            };
+            initAuth();
+            const unsub = onAuthStateChanged(auth, setFirebaseUser);
+            return () => unsub();
+          }, []);
+
+          useEffect(() => {
+            if (!firebaseUser) return;
+            setLoading(true);
+            const studentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+            const unsubStudents = onSnapshot(studentsRef, (snap) => {
+              setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+              setLoading(false);
+              setFbError(null);
+            }, (err) => {
+              setFbError(`Erro nos Alunos (${err.code})`);
+              setLoading(false);
+            });
+
+            const schoolsRef = collection(db, 'artifacts', appId, 'public', 'data', 'schools');
+            const unsubSchools = onSnapshot(schoolsRef, (snap) => {
+              setDbSchools(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            }, (err) => {
+              setFbError(`Erro nos Polos (${err.code})`);
+            });
+
+            return () => { unsubStudents(); unsubSchools(); };
+          }, [firebaseUser]);
+
+          const allSchools = useMemo(() => {
+            const custom = dbSchools.map(s => s.name).filter(Boolean);
+            return Array.from(new Set([...DEFAULT_SCHOOLS, ...custom])).sort((a, b) => a.localeCompare(b));
+          }, [dbSchools]);
+
+          useEffect(() => {
+            if (notification) {
+              const timer = setTimeout(() => setNotification(null), 3500);
+              return () => clearTimeout(timer);
+            }
+          }, [notification]);
+
+          const showNotify = (message, type = 'success') => setNotification({ message, type });
+
+          const handleLogin = (role) => {
+            setFbError(null);
+            setUser({ role });
+            setView(role === 'admin' ? 'dashboard' : 'form');
+            showNotify(`Bem-vindo, ${role === 'admin' ? 'Administrador' : 'Professor'}!`);
+          };
+
+          const handleLogout = () => { setUser(null); setView('login'); setNotification(null); };
+
+          const addStudent = async (data) => {
+            if (!firebaseUser) return showNotify("Sem ligação.", "error");
+            try {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'students'), {
+                ...data, status: 'pendente', createdAt: new Date().toISOString()
+              });
+              showNotify("Solicitação enviada!");
+              setView(user.role === 'admin' ? 'dashboard' : 'public_list');
+            } catch (e) { showNotify(`Erro: ${e.code}`, "error"); }
+          };
+
+          const updateStatus = async (id, status) => {
+            try {
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', id), { status });
+              showNotify("Estado atualizado.");
+            } catch (e) { showNotify(`Erro: ${e.code}`, "error"); }
+          };
+
+          const deleteStudent = (id) => {
+            setConfirmModal({
+              message: "Excluir registo permanentemente?",
+              onConfirm: async () => {
+                try {
+                  await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', id));
+                  setConfirmModal(null);
+                  showNotify("Removido.");
+                } catch (e) { showNotify(`Erro ao apagar: ${e.code}`, "error"); }
+              }
+            });
+          };
+
+          if (!user) return <LoginScreen onLogin={handleLogin} />;
+
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-10 font-sans">
+              {notification && (
+                <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] p-4 rounded-2xl shadow-2xl text-white flex items-center gap-3 animate-in fade-in slide-in-from-top-6 duration-300 min-w-[300px] justify-center ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+                  {notification.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                  <span className="font-bold">{notification.message}</span>
+                </div>
+              )}
+
+              {fbError && (
+                <div className="bg-red-600 text-white p-4 text-center text-xs font-bold flex items-center justify-center gap-3 sticky top-0 z-[100] shadow-lg">
+                  <ShieldAlert size={18} /> <span>{fbError}</span>
+                  <button onClick={() => setFbError(null)} className="ml-auto"><X size={18}/></button>
+                </div>
+              )}
+
+              {confirmModal && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+                  <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200 border border-slate-100 text-center">
+                    <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={32} /></div>
+                    <h3 className="text-xl font-black text-slate-800 mb-2">Confirmar</h3>
+                    <p className="text-slate-500 mb-8 text-sm">{confirmModal.message}</p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setConfirmModal(null)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-slate-600 text-xs uppercase tracking-widest">Não</button>
+                      <button onClick={confirmModal.onConfirm} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase shadow-lg shadow-red-100">Sim, Apagar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <header className={`sticky top-0 z-40 ${user.role === 'admin' ? 'bg-blue-700' : 'bg-indigo-700'} text-white shadow-xl h-16 md:h-20 flex items-center`}>
+                <div className="max-w-7xl mx-auto px-4 w-full flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-white/20 p-2.5 rounded-2xl"><School size={28} /></div>
+                    <div>
+                      <h1 className="text-xl font-black tracking-tight leading-none">SalaMaker</h1>
+                      <p className="text-[9px] uppercase tracking-[0.3em] font-black opacity-60 mt-1">{user.role}</p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex items-center gap-2">
+                    <NavButtons view={view} setView={setView} role={user.role} />
+                    <button onClick={handleLogout} className="ml-4 p-3 hover:bg-white/10 rounded-2xl transition-all"><LogOut size={20} /></button>
+                  </div>
+                  <button onClick={handleLogout} className="md:hidden p-3 bg-white/10 rounded-2xl"><LogOut size={20} /></button>
+                </div>
+              </header>
+
+              <main className="max-w-7xl mx-auto px-4 py-8 md:py-12">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-40 text-slate-400">
+                    <RefreshCw className="animate-spin mb-6 text-blue-500" size={56} />
+                    <p className="font-black uppercase tracking-[0.4em] text-[10px]">Sincronizando...</p>
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in duration-700">
+                    {view === 'dashboard' && <AdminPoloQueue students={students} schools={allSchools} onUpdate={updateStatus} onDelete={deleteStudent} showNotify={showNotify} />}
+                    {view === 'enrolled' && <AdminList students={students} onUpdate={updateStatus} onDelete={deleteStudent} schools={allSchools} type="matriculado" showNotify={showNotify} />}
+                    {view === 'schools' && (
+                      <SchoolSettings 
+                        allSchools={allSchools} dbSchools={dbSchools} 
+                        onAdd={async (n) => await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schools'), { name: n.toUpperCase() })} 
+                        onDelete={async (s) => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schools', s.id))} 
+                        showNotify={showNotify}
+                      />
+                    )}
+                    {view === 'form' && <RequestForm onSubmit={addStudent} schools={allSchools} students={students} onCancel={() => setView('dashboard')} isAdmin={user.role === 'admin'} />}
+                    {view === 'public_list' && <PublicList students={students} schools={allSchools} />}
+                  </div>
+                )}
+              </main>
+
+              <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 md:hidden flex justify-around p-3 z-40 pb-safe shadow-2xl">
+                <NavButtons view={view} setView={setView} role={user.role} mobile />
+              </nav>
+            </div>
+          );
+        }
+
+        function NavButtons({ view, setView, role, mobile }) {
+          const isAdmin = role === 'admin';
+          const btn = (v, Icon, label) => (
+            <button onClick={() => setView(v)} className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2.5 rounded-2xl transition-all ${
+              view === v ? (mobile ? 'text-blue-600 bg-blue-50 font-black' : 'bg-white/20 text-white font-black shadow-inner') : (mobile ? 'text-slate-400 font-bold' : 'text-white/60 hover:bg-white/10 font-bold')
+            }`}>
+              <Icon size={mobile ? 22 : 18} />
+              <span className="text-[10px] md:text-sm">{label}</span>
+            </button>
+          );
+          if (isAdmin) return <>{btn('dashboard', LayoutDashboard, 'Fila')}{btn('enrolled', Users, 'Alunos')}{btn('schools', MapPin, 'Polos')}{btn('form', PlusCircle, 'Novo')}</>;
+          return <>{btn('form', PlusCircle, 'Solicitar')}{btn('public_list', Eye, 'Consultar')}</>;
+        }
+
+        function LoginScreen({ onLogin }) {
+          const [pass, setPass] = useState('');
+          const [err, setErr] = useState('');
+          const submit = (e) => {
+            e.preventDefault();
+            if (pass === PASSWORDS.ADMIN) onLogin('admin');
+            else if (pass === PASSWORDS.PROFESSOR) onLogin('professor');
+            else setErr('Senha inválida.');
+          };
+          return (
+            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+              <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-md border border-slate-200 text-center animate-in zoom-in duration-300">
+                <div className="inline-flex p-6 bg-blue-600 text-white rounded-[2rem] mb-8 shadow-xl shadow-blue-100"><School size={48} /></div>
+                <h1 className="text-3xl font-black text-slate-800 tracking-tight">SalaMaker</h1>
+                <p className="text-slate-400 text-xs font-black uppercase tracking-widest mt-2 mb-10 tracking-[0.3em]">Gestão Escolar</p>
+                <form onSubmit={submit} className="space-y-6">
+                  <div className="relative">
+                    <Lock className="absolute left-5 top-5 text-slate-300" size={20} />
+                    <input type="password" value={pass} onChange={e => {setPass(e.target.value); setErr('');}} className="w-full pl-14 pr-6 py-5 rounded-3xl border-2 border-slate-50 focus:border-blue-600 focus:bg-white bg-slate-50 outline-none transition-all font-bold text-lg" placeholder="Senha de Acesso" autoFocus />
+                  </div>
+                  {err && <p className="text-red-500 text-xs font-bold px-2">{err}</p>}
+                  <button className="w-full bg-slate-900 hover:bg-black text-white font-black py-5 rounded-3xl shadow-xl transition-all active:scale-95 text-sm uppercase tracking-widest">Entrar no Painel</button>
+                </form>
+                <div className="mt-12 pt-8 border-t border-slate-50">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4">Senha do Professor</p>
+                  <div className="flex justify-center gap-2">
+                    <code className="bg-slate-50 px-4 py-2 rounded-xl text-blue-600 font-black text-xs border border-slate-100 uppercase tracking-widest shadow-sm hover:shadow-md transition-shadow">
+                      maker123
+                    </code>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function AdminPoloQueue({ students, schools, onUpdate, onDelete, showNotify }) {
+          const [activePolo, setActivePolo] = useState(null);
+          const [search, setSearch] = useState('');
+
+          const poloStats = useMemo(() => {
+            const stats = {};
+            schools.forEach(school => {
+              stats[school] = {
+                pendente: students.filter(s => s.escola === school && s.status === 'pendente').length,
+                espera: students.filter(s => s.escola === school && s.status === 'espera').length
+              };
+            });
+            return stats;
+          }, [students, schools]);
+
+          const filteredStudents = useMemo(() => {
+            if (!activePolo) return [];
+            return students
+              .filter(s => s.escola === activePolo && (s.aluno?.toLowerCase().includes(search.toLowerCase()) || s.op1?.toLowerCase().includes(search.toLowerCase())))
+              .sort((a, b) => {
+                const order = { 'pendente': 0, 'espera': 1, 'matriculado': 2 };
+                if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+                return new Date(b.createdAt) - new Date(a.createdAt);
+              });
+          }, [students, activePolo, search]);
+
+          if (!activePolo) {
+            return (
+              <div className="space-y-10">
+                <div className="text-center md:text-left">
+                  <h2 className="text-4xl font-black text-slate-800 tracking-tighter">Fila por Polo</h2>
+                  <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2 px-1">Polos com pendências piscarão para chamar a sua atenção</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {schools.map(school => {
+                    const stats = poloStats[school] || { pendente: 0, espera: 0 };
+                    const hasPendente = stats.pendente > 0;
+                    const hasEspera = stats.espera > 0 && !hasPendente;
+                    const count = stats.pendente + stats.espera;
+                    
+                    let cardClass = 'border-slate-50 hover:border-blue-400 hover:shadow-2xl';
+                    let iconBgClass = 'bg-slate-100 text-slate-400 group-hover:bg-blue-600 group-hover:text-white';
+                    let textClass = 'text-slate-800';
+                    let badgeClass = 'bg-slate-50 text-slate-400';
+                    let pingColor = '';
+
+                    if (hasPendente) {
+                        cardClass = 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-pulse';
+                        iconBgClass = 'bg-red-600 text-white';
+                        textClass = 'text-red-600';
+                        badgeClass = 'bg-red-600 text-white';
+                        pingColor = 'bg-red-600';
+                    } else if (hasEspera) {
+                        cardClass = 'border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse';
+                        iconBgClass = 'bg-blue-500 text-white';
+                        textClass = 'text-blue-600';
+                        badgeClass = 'bg-blue-100 text-blue-800';
+                        pingColor = 'bg-blue-500';
+                    }
+
+                    return (
+                      <button 
+                        key={school} 
+                        onClick={() => setActivePolo(school)}
+                        className={`group relative bg-white p-8 rounded-[2.5rem] border-4 transition-all text-left hover:scale-[1.03] ${cardClass}`}
+                      >
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-colors ${iconBgClass}`}>
+                          <MapPin size={28} />
+                        </div>
+                        <h3 className={`font-black text-xl leading-tight uppercase mb-2 ${textClass}`}>
+                          {school}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                           <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeClass}`}>
+                              {count === 0 ? 'Sem pendências' : `${count} na fila`}
+                           </div>
+                           {(hasPendente || hasEspera) && <div className={`w-2 h-2 rounded-full animate-ping ${pingColor}`} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => { setActivePolo(null); setSearch(''); }} className="p-4 bg-white rounded-2xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-all shadow-sm"><ArrowLeft size={24} /></button>
+                  <div>
+                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">{activePolo}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                       <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Priorizando Pendentes</span>
+                       <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{filteredStudents.length} registros</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="relative flex-grow max-w-md">
+                  <Search className="absolute left-5 top-5 text-slate-400" size={24} />
+                  <input type="text" placeholder="Procurar nesta fila..." className="w-full pl-16 pr-6 py-5 rounded-[1.5rem] border-2 border-slate-200 focus:border-blue-600 outline-none font-bold" value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                {filteredStudents.map(s => (
+                  <div key={s.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 ${s.status === 'matriculado' ? 'opacity-60 border-slate-100 grayscale-[0.5]' : 'border-slate-200 hover:shadow-xl hover:scale-[1.01]'}`}>
+                    <div className="flex gap-6 items-start w-full md:w-auto overflow-hidden">
+                      <div className={`p-4 rounded-2xl shrink-0 ${s.status === 'matriculado' ? 'bg-emerald-100 text-emerald-600' : s.status === 'espera' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                        {s.status === 'matriculado' ? <CheckCircle2 size={32} /> : <Clock size={32} />}
+                      </div>
+                      <div className="space-y-2 min-w-0">
+                        <h4 className="font-black text-slate-800 text-2xl leading-tight flex items-center gap-2 truncate">
+                          <span className="truncate">{s.aluno}</span>
+                          <button onClick={() => { copyToClipboard(s.aluno); showNotify('Nome copiado com sucesso!'); }} className="p-1.5 bg-slate-100 hover:bg-blue-100 hover:text-blue-600 rounded-lg text-slate-400 transition-colors shrink-0" title="Copiar nome do aluno">
+                             <Copy size={18} />
+                          </button>
+                        </h4>
+                        
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
+                           <span className="text-xs font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                             {s.serie} {s.ciclo ? `· ${s.ciclo}` : ''} {s.periodo ? `· ${s.periodo}` : ''}
+                           </span>
+                           <span className="text-xs font-black text-blue-800 uppercase tracking-widest bg-blue-100 px-3 py-1.5 rounded-xl border border-blue-200">OP1: {s.op1}</span>
+                           {s.op2 && <span className="text-xs font-black text-slate-500 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">OP2: {s.op2}</span>}
+                           {s.op3 && <span className="text-xs font-black text-slate-500 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">OP3: {s.op3}</span>}
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center mt-1 w-full">{formatDate(s.createdAt)}</span>
+                        </div>
+
+                        {s.observacao && (
+                          <div className="flex items-start gap-2 text-xs font-bold text-slate-500 italic bg-amber-50 px-4 py-3 rounded-2xl mt-3 border border-amber-100">
+                            <MessageSquare size={16} className="text-amber-500 shrink-0 mt-0.5" /> 
+                            <span className="leading-snug">"{s.observacao}"</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col md:items-end gap-4 shrink-0">
+                       <StatusBadge status={s.status} type={s.tipoSolicitacao} />
+                       <div className="flex gap-2">
+                          <button onClick={() => onUpdate(s.id, s.status === 'matriculado' ? 'pendente' : 'matriculado')} className={`px-6 py-4 rounded-2xl font-black text-xs uppercase transition-all active:scale-95 shadow-lg ${s.status === 'matriculado' ? 'bg-slate-800 text-white' : 'bg-emerald-600 text-white shadow-emerald-100'}`}>
+                            {s.status === 'matriculado' ? 'Reverter' : 'Matricular'}
+                          </button>
+                          {s.status === 'pendente' && (
+                            <button onClick={() => onUpdate(s.id, 'espera')} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Mover para Espera"><PauseCircle size={24}/></button>
+                          )}
+                          <button onClick={() => onDelete(s.id)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={24}/></button>
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        function AdminList({ students, onUpdate, onDelete, schools, type, showNotify }) {
+          const [search, setSearch] = useState('');
+          const [polo, setPolo] = useState('todos');
+          const filtered = useMemo(() => {
+            return students.filter(s => {
+              const isType = type === 'pendente' ? (s.status === 'pendente' || s.status === 'espera') : s.status === 'matriculado';
+              const matchesSearch = s.aluno?.toLowerCase().includes(search.toLowerCase()) || s.op1?.toLowerCase().includes(search.toLowerCase());
+              const matchesPolo = polo === 'todos' || s.escola === polo;
+              return isType && matchesSearch && matchesPolo;
+            }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+          }, [students, search, polo, type]);
+          return (
+            <div className="space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div><h2 className="text-4xl font-black text-slate-800 tracking-tighter flex items-center gap-4">{type === 'pendente' ? <Clock size={40} className="text-amber-500" /> : <CheckCircle2 size={40} className="text-emerald-500" />}{type === 'pendente' ? 'Solicitações' : 'Matriculados'}</h2></div>
+                <div className="bg-white px-8 py-3 rounded-2xl border border-slate-200 text-sm font-black text-slate-700 shadow-sm flex items-center gap-3"><Database size={16} className="text-blue-500"/>{filtered.length} REGISTOS</div>
+              </div>
+              <div className="flex flex-col md:flex-row gap-4 bg-white p-5 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                <div className="relative flex-grow"><Search className="absolute left-5 top-5 text-slate-400" size={24} /><input type="text" placeholder="Procurar aluno ou turma..." className="w-full pl-16 pr-6 py-5 rounded-[1.5rem] border-2 border-slate-50 focus:border-blue-100 focus:bg-slate-50 outline-none transition-all font-bold" value={search} onChange={e => setSearch(e.target.value)} /></div>
+                <select className="pl-6 pr-10 py-5 rounded-[1.5rem] border-2 border-slate-50 outline-none bg-white font-black text-xs uppercase tracking-widest cursor-pointer" value={polo} onChange={e => setPolo(e.target.value)}><option value="todos">Todos os Polos</option>{schools.map(s => <option key={s} value={s}>{s}</option>)}</select>
+              </div>
+              <div className="hidden md:block bg-white rounded-[3rem] shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50/50 border-b border-slate-100"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Aluno / Unidade</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Turma / Opções</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status / Obs.</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th></tr></thead>
+                  <tbody className="divide-y divide-slate-50">{filtered.map(s => (<tr key={s.id} className="hover:bg-slate-50/50 transition-colors group"><td className="px-10 py-8"><div className="font-black text-slate-800 text-xl tracking-tight flex items-center gap-2"><span className="truncate">{s.aluno}</span> <button onClick={() => { copyToClipboard(s.aluno); showNotify('Nome copiado com sucesso!'); }} className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shrink-0" title="Copiar nome"><Copy size={18} /></button></div><div className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-2"><MapPin size={14} className="text-blue-500"/> {s.escola}</div></td><td className="px-10 py-8"><div className="text-sm font-black text-slate-600 uppercase tracking-tight">{s.serie} {s.ciclo ? `· ${s.ciclo}` : ''} {s.periodo ? `· ${s.periodo}` : ''}</div><div className="mt-3 flex flex-wrap gap-2"><span className="bg-blue-600 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-[0.2em] border border-blue-700">OP1: {s.op1}</span>{s.op2 && <span className="bg-slate-100 text-slate-500 text-[10px] px-3 py-1.5 rounded-lg font-black tracking-[0.2em] border border-slate-200">OP2: {s.op2}</span>}{s.op3 && <span className="bg-slate-100 text-slate-500 text-[10px] px-3 py-1.5 rounded-lg font-black tracking-[0.2em] border border-slate-200">OP3: {s.op3}</span>}</div></td><td className="px-10 py-8"><div className="space-y-3"><StatusBadge status={s.status} type={s.tipoSolicitacao} />{s.observacao && <div className="flex items-start gap-2 bg-amber-50 p-3 rounded-xl border border-amber-100 max-w-[200px]"><MessageSquare size={14} className="text-amber-500 mt-0.5 shrink-0" /><span className="text-[10px] font-bold text-slate-600 leading-tight italic line-clamp-3" title={s.observacao}>{s.observacao}</span></div>}</div></td><td className="px-10 py-8 text-right"><div className="flex justify-end gap-3 opacity-30 group-hover:opacity-100 transition-opacity"><button onClick={() => onUpdate(s.id, s.status === 'matriculado' ? 'pendente' : 'matriculado')} className={`p-4 rounded-2xl transition-all shadow-sm ${s.status === 'matriculado' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}>{s.status === 'matriculado' ? <RefreshCw size={22} /> : <CheckCircle2 size={22} />}</button>{s.status === 'pendente' && <button onClick={() => onUpdate(s.id, 'espera')} className="p-4 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"><PauseCircle size={22} /></button>}<button onClick={() => onDelete(s.id)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={22} /></button></div></td></tr>))}</tbody>
+                </table>
+                {filtered.length === 0 && <EmptyState />}
+              </div>
+              <div className="md:hidden space-y-6">{filtered.map(s => (<div key={s.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8"><div className="flex justify-between items-start gap-4"><div className="overflow-hidden"><h3 className="font-black text-slate-800 text-xl leading-tight flex items-start gap-2 truncate"><span className="truncate">{s.aluno}</span> <button onClick={() => { copyToClipboard(s.aluno); showNotify('Nome copiado!'); }} className="p-1 text-slate-300 hover:text-blue-600 rounded-lg shrink-0"><Copy size={20} /></button></h3><p className="text-xs font-bold text-slate-400 mt-2 flex items-center gap-2"><MapPin size={14}/> {s.escola}</p></div><StatusBadge status={s.status} type={s.tipoSolicitacao} /></div>{s.observacao && <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-start gap-3"><MessageSquare size={16} className="text-amber-500 shrink-0 mt-0.5" /><p className="text-xs font-bold text-slate-600 italic leading-snug">{s.observacao}</p></div>}<div className="flex flex-wrap gap-2 text-[10px] font-black uppercase"><span className="bg-slate-100 px-4 py-2 rounded-2xl text-slate-500 border border-slate-100">{s.serie} {s.ciclo ? `· ${s.ciclo}` : ''}</span><span className="bg-blue-600 text-white px-4 py-2 rounded-2xl tracking-widest border border-blue-700">OP1: {s.op1}</span>{s.op2 && <span className="bg-slate-100 text-slate-500 px-4 py-2 rounded-2xl tracking-widest border border-slate-200">OP2: {s.op2}</span>}{s.op3 && <span className="bg-slate-100 text-slate-500 px-4 py-2 rounded-2xl tracking-widest border border-slate-200">OP3: {s.op3}</span>}</div><div className="pt-6 border-t border-slate-50 flex gap-3"><button onClick={() => onUpdate(s.id, s.status === 'matriculado' ? 'pendente' : 'matriculado')} className={`flex-1 flex items-center justify-center gap-2 py-5 rounded-3xl font-black text-sm active:scale-95 transition-all ${s.status === 'matriculado' ? 'bg-slate-800 text-white' : 'bg-emerald-600 text-white shadow-xl shadow-emerald-100'}`}>{s.status === 'matriculado' ? <RefreshCw size={18}/> : <CheckCircle2 size={18}/>}{s.status === 'matriculado' ? 'Reverter' : 'Matricular'}</button><button onClick={() => onDelete(s.id)} className="w-16 flex items-center justify-center py-5 bg-red-50 text-red-600 rounded-3xl active:scale-95"><Trash2 size={22}/></button></div></div>))}</div>
+            </div>
+          );
+        }
+
+        function StatusBadge({ status, type }) {
+          const configs = { matriculado: { label: 'Efetivada', class: 'bg-emerald-100 text-emerald-800 border-emerald-200' }, pendente: { label: 'Pendente', class: 'bg-red-100 text-red-800 border-red-200' }, espera: { label: 'Em Espera', class: 'bg-blue-100 text-blue-800 border-blue-200' } };
+          const config = configs[status] || configs.pendente;
+          return <div className="flex flex-col items-start md:items-end gap-2"><span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full border-2 ${config.class} tracking-widest`}>{config.label}</span>{type && type !== 'Matrícula' && <span className="text-[9px] font-black text-purple-600 bg-purple-50 border border-purple-100 px-2 rounded-lg uppercase">{type}</span>}</div>;
+        }
+
+        function RequestForm({ onSubmit, schools, students, onCancel, isAdmin }) {
+          const [form, setForm] = useState({ aluno: '', serie: '1º Ano', ciclo: 'KIDS 1', periodo: 'MANHÃ', op1: '', op2: '', op3: '', escola: '', observacao: '', tipoSolicitacao: 'Matrícula' });
+          const isFull = useMemo(() => { if (!form.op1) return false; const count = students.filter(s => s.status === 'matriculado' && s.op1?.toUpperCase() === form.op1.toUpperCase()).length; return count >= CLASS_CAPACITY; }, [form.op1, students]);
+          const handleSend = (e) => { e.preventDefault(); if (!form.aluno || !form.op1 || !form.escola) return; onSubmit(form); if (!isAdmin) setForm({ aluno: '', serie: '1º Ano', ciclo: 'KIDS 1', periodo: 'MANHÃ', op1: '', op2: '', op3: '', escola: '', observacao: '', tipoSolicitacao: 'Matrícula' }); };
+          return (
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-12 duration-500">
+                <div className={`px-10 py-8 flex justify-between items-center ${isAdmin ? 'bg-blue-700' : 'bg-indigo-700'} text-white`}><div><h2 className="text-3xl font-black tracking-tighter flex items-center gap-4"><UserPlus size={32} /> Solicitar Vaga</h2><p className="text-white/50 text-xs font-black uppercase tracking-widest mt-2">Introduza os dados obrigatórios</p></div>{isAdmin && <button onClick={onCancel} className="p-3 hover:bg-white/20 rounded-2xl transition-all"><X size={32} /></button>}</div>
+                <form onSubmit={handleSend} className="p-10 space-y-12">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['Matrícula', 'Alteração de Turma', 'Exclusão'].map(tipo => <button key={tipo} type="button" onClick={() => setForm({...form, tipoSolicitacao: tipo})} className={`py-5 rounded-[1.5rem] border-2 font-black transition-all text-xs uppercase tracking-widest ${form.tipoSolicitacao === tipo ? 'bg-slate-900 border-slate-900 text-white shadow-2xl' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}>{tipo}</button>)}</div>
+                  <section className="space-y-8"><div className="flex items-center gap-4"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">01</div><h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Identificação</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="md:col-span-3"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Nome Completo</label><input required type="text" className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all text-lg" placeholder="Digite o nome..." value={form.aluno} onChange={e => setForm({...form, aluno: e.target.value})} /></div><div className="md:col-span-3"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Escola de Origem</label><select required className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold outline-none cursor-pointer focus:border-blue-600" value={form.escola} onChange={e => setForm({...form, escola: e.target.value})}><option value="">Selecione o Polo...</option>{schools.map(s => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Série</label><select className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold outline-none focus:border-blue-600 cursor-pointer" value={form.serie} onChange={e => setForm({...form, serie: e.target.value})}>{['1º Ano', '2º Ano', '3º Ano', '4º Ano', '5º Ano', '6º Ano', '7º Ano', '8º Ano', '9º Ano'].map(s => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Ciclo</label><select className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold outline-none focus:border-blue-600 cursor-pointer" value={form.ciclo} onChange={e => setForm({...form, ciclo: e.target.value})}>{['KIDS 1', 'KIDS 2', 'JUNIOR', 'TEEN', 'OBR', 'INOVAÇÃO'].map(s => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Período</label><select className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold outline-none focus:border-blue-600 cursor-pointer" value={form.periodo} onChange={e => setForm({...form, periodo: e.target.value})}>{['MANHÃ', 'TARDE'].map(s => <option key={s} value={s}>{s}</option>)}</select></div></div></section>
+                  <section className="space-y-8"><div className="flex items-center gap-4"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">02</div><h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Turma Maker</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Código da Turma</label><input required type="text" className={`w-full p-5 rounded-2xl border-2 outline-none font-black text-center tracking-widest transition-all uppercase text-lg ${isFull ? 'bg-red-50 border-red-300 text-red-600' : 'bg-blue-50 border-blue-200 text-blue-900 focus:border-blue-600'}`} placeholder="7M2203" value={form.op1} onChange={e => setForm({...form, op1: e.target.value.toUpperCase()})} />{isFull && <p className="text-[9px] text-red-600 font-black mt-3 flex items-center gap-2 px-1"><AlertTriangle size={12}/> Turma Lotada ({CLASS_CAPACITY})</p>}</div><div><label className="block text-[10px] font-black text-slate-200 uppercase tracking-widest mb-3">2ª Opção</label><input type="text" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-center outline-none uppercase" placeholder="---" value={form.op2} onChange={e => setForm({...form, op2: e.target.value.toUpperCase()})} /></div><div><label className="block text-[10px] font-black text-slate-200 uppercase tracking-widest mb-3">3ª Opção</label><input type="text" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-center outline-none uppercase" placeholder="---" value={form.op3} onChange={e => setForm({...form, op3: e.target.value.toUpperCase()})} /></div></div></section>
+                  <section className="space-y-8"><div className="flex items-center gap-4"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">03</div><h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Informações Adicionais</h3></div><div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Observações / Motivo do Pedido</label><textarea className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all text-sm resize-none" rows="3" placeholder="Ex: Motivo da exclusão, troca de período, etc." value={form.observacao} onChange={e => setForm({...form, observacao: e.target.value})}/></div></section>
+                  <div className="pt-10 flex flex-col md:flex-row gap-4"><button type="submit" className="flex-[3] py-6 bg-slate-900 hover:bg-black text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 text-lg uppercase tracking-[0.2em] flex items-center justify-center gap-4">Enviar Pedido <ChevronRight size={28}/></button>{isAdmin && <button type="button" onClick={onCancel} className="flex-1 py-6 bg-slate-100 text-slate-600 rounded-[2rem] font-black uppercase text-xs tracking-widest transition-all">Voltar</button>}</div>
+                </form>
+              </div>
+            </div>
+          );
+        }
+
+        function PublicList({ students, schools }) {
+          const [search, setSearch] = useState('');
+          const [selectedPolo, setSelectedPolo] = useState('');
+          const list = useMemo(() => { return students.filter(s => { const matchesPolo = selectedPolo === '' || s.escola === selectedPolo; const matchesSearch = s.aluno?.toLowerCase().includes(search.toLowerCase()); return matchesPolo && matchesSearch; }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); }, [students, search, selectedPolo]);
+          return (
+            <div className="max-w-4xl mx-auto space-y-12"><div className="text-center"><h2 className="text-5xl font-black text-slate-900 tracking-tighter">Consulta Geral</h2><p className="text-slate-400 font-bold mt-3 uppercase text-xs tracking-[0.5em]">Acompanhe suas solicitações</p></div>
+              <div className="space-y-6">
+                <div className="bg-white p-4 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col md:flex-row items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-4 rounded-[1.8rem] shrink-0"><MapPin size={28} /></div><div className="flex-grow w-full"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-2">Passo 1: Selecione o Polo</label><select className="w-full bg-transparent p-2 text-xl font-bold outline-none cursor-pointer appearance-none" value={selectedPolo} onChange={e => { setSelectedPolo(e.target.value); setSearch(''); }}><option value="">Escolha uma Unidade...</option>{schools.map(s => <option key={s} value={s}>{s}</option>)}</select></div>{selectedPolo && <div className="hidden md:block animate-in slide-in-from-right-4"><ArrowRight className="text-emerald-500" size={32} /></div>}</div>
+                {selectedPolo ? (<div className="relative group animate-in slide-in-from-top-4 duration-500"><div className="absolute inset-0 bg-emerald-600 rounded-[3rem] blur-3xl opacity-5 transition-opacity" /><Search className="absolute left-8 top-8 text-emerald-400" size={32} /><input type="text" placeholder={`Pesquisar aluno no ${selectedPolo}...`} className="w-full pl-24 pr-10 py-8 bg-white rounded-[3rem] border-2 border-emerald-50 shadow-2xl shadow-emerald-100/20 outline-none text-2xl font-bold transition-all focus:ring-8 focus:ring-emerald-50 focus:border-emerald-200" value={search} onChange={e => setSearch(e.target.value)} autoFocus /></div>) : (<div className="bg-slate-100/50 p-10 rounded-[3rem] border-2 border-dashed border-slate-200 text-center text-slate-400 animate-pulse"><Info size={32} className="mx-auto mb-4 opacity-50" /><p className="font-bold text-sm uppercase tracking-widest">Selecione o polo acima para pesquisar...</p></div>)}
+              </div>
+              <div className="grid grid-cols-1 gap-6">{selectedPolo && list.map(s => (<div key={s.id} className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-8 hover:shadow-2xl transition-all hover:scale-[1.02]"><div className="flex gap-8 items-start"><div className={`p-5 rounded-3xl ${s.status === 'matriculado' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}><UserPlus size={40} /></div><div><h4 className="font-black text-slate-800 text-3xl leading-none tracking-tight">{s.aluno}</h4><div className="flex flex-wrap gap-x-8 gap-y-3 mt-4"><span className="text-[10px] font-black text-slate-400 flex items-center gap-2 uppercase tracking-widest"><MapPin size={14} className="text-blue-400"/> {s.escola}</span><span className="text-[10px] font-black text-blue-500/40 flex items-center gap-2 uppercase tracking-widest"><Clock size={14}/> {formatDate(s.createdAt)}</span></div></div></div><div className="flex flex-col md:items-end gap-4"><StatusBadge status={s.status} /><div className="text-[9px] font-black text-slate-300 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 uppercase tracking-[0.2em]">Cód. Turma: {s.op1}</div></div></div>))}{selectedPolo && list.length === 0 && <EmptyState text="Nenhum aluno encontrado neste polo." />}</div>
+            </div>
+          );
+        }
+
+        function SchoolSettings({ allSchools, dbSchools, onAdd, onDelete, showNotify }) {
+          const [name, setName] = useState('');
+          const fileInputRef = useRef(null);
+          const handleFileUpload = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              const content = e.target.result;
+              const lines = content.split(/\r?\n/).map(line => line.trim().toUpperCase()).filter(line => line.length > 0);
+              let addedCount = 0;
+              for (const line of lines) { if (!allSchools.includes(line)) { await onAdd(line); addedCount++; } }
+              if (addedCount > 0) showNotify(`${addedCount} novos polos importados!`);
+              else showNotify("Nenhum polo novo encontrado.", "error");
+              event.target.value = null;
+            };
+            reader.readAsText(file);
+          };
+          return (
+            <div className="max-w-4xl mx-auto space-y-10">
+              <div className="flex justify-between items-end">
+                <div><h2 className="text-4xl font-black text-slate-800 tracking-tighter">Polos & Escolas</h2><p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2">Configuração do Sistema</p></div>
+              </div>
+              <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                <form className="flex flex-col md:flex-row gap-4 mb-6" onSubmit={e => { e.preventDefault(); onAdd(name); setName(''); }}><input required type="text" placeholder="Nome do Novo Polo..." className="flex-grow p-6 bg-slate-50 rounded-[1.5rem] outline-none border-2 border-transparent focus:border-blue-600 focus:bg-white font-bold transition-all shadow-inner text-lg" value={name} onChange={e => setName(e.target.value)} /><button className="bg-blue-600 text-white px-10 py-5 md:py-0 rounded-[1.5rem] font-black flex items-center justify-center gap-3 shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all text-xs uppercase tracking-widest"><PlusCircle size={20}/> Adicionar</button></form>
+                <div className="mb-12"><input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileUpload} className="hidden" /><button onClick={() => fileInputRef.current.click()} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 p-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 border-2 border-dashed border-slate-300 transition-all uppercase text-xs tracking-widest"><UploadIcon size={20}/> Importar Polos por Ficheiro (.txt)</button></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{allSchools.map(s => { const dbObj = dbSchools.find(x => x.name === s); return (<div key={s} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-blue-200 transition-colors group"><span className="font-black text-slate-700 truncate pr-6 text-sm uppercase tracking-tight">{s}</span>{dbObj ? (<button onClick={() => onDelete(dbObj)} className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"><Trash2 size={22}/></button>) : (<span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] border border-slate-200 px-3 py-1.5 rounded-xl bg-white">Padrão</span>)}</div>);})}</div>
+              </div>
+            </div>
+          );
+        }
+
+        function EmptyState({ text = "Sem dados para exibir" }) {
+          return (
+            <div className="py-40 flex flex-col items-center text-slate-200"><Database size={80} className="mb-6 opacity-20" /><p className="font-black uppercase tracking-[0.5em] text-[10px] text-center">{text}</p></div>
+          );
+        }
+
+        // Renderização Final
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
